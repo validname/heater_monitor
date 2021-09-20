@@ -1,0 +1,68 @@
+
+----- board pinout
+
+for Wemos D1 clone:
+
+	clone/R1	real	+5V	func	
+GPIO0	D8		D3	+	- / 10k Pull-up
+GPIO1	TX/D1		TX	+	(Serial console)
+GPIO2	TX1/D9		D4	+	TX1 / 10k Pull-up, BUILTIN_LED
+GPIO3	RX/D0		RX	+	(Serial console)
+GPIO4	D14/SDA/D4	D2	+	I2C Bus SDA (data)
+GPIO5	D15/SCL/D3	D1	+	I2C Bus SCL (clock)
+GPIO6	-		-	-	(internal/flash)
+GPIO7	-		-	-	(internal/flash)
+GPIO8	-		-	-	(internal/flash)
+GPIO9	-		-	-	(internal/flash)
+GPIO10	-		-	-	(internal/flash)
+GPIO11	-		-	-	(internal/flash)
+GPIO12	D12/MISO/D6	D6	+	SPI Bus MISO
+GPIO13	D11/MOSI/D7	D7	+	SPI Bus MOSI
+GPIO14	D13/SCK/D5	D5	+	SPI Bus SCK (clock)
+GPIO15	D10/SS		D8	+	SPI Bus SS (CS)
+GPIO16	D2		D0	+	-
+
+https://github.com/esp8266/Arduino/blob/2.5.0-beta2/variants/d1/pins_arduino.h#L38-L53
+https://cyaninfinite.com/getting-started-with-the-wemos-d1-esp8266-wifi-board/
+https://www.instructables.com/NodeMCU-ESP8266-Details-and-Pinout/
+
+----- ESP8266 Arduino
+
+https://arduino.esp8266.com/stable/package_esp8266com_index.json
+
+----- DS18B20
+
+https://randomnerdtutorials.com/esp8266-ds18b20-temperature-sensor-web-server-with-arduino-ide/
+https://www.instructables.com/Simple-Example-ArduinoESP8266DS18B20/
+
+Libraries:
+	OneWire
+	Dallas
+
+1-wire	blue	GPIO0	D8
+
+----- LCD 1602 + i2c
+
+https://randomnerdtutorials.com/esp32-esp8266-i2c-lcd-arduino-ide/
+
+Libraries:
+	LuquidCrystal_I2C
+
+SDA	white	GPIO4	D14
+SCL	yellow	GPIO5	D15
+
+1602 address is 0x27
+
+i 99.9 | w 99.9
+o 99.9 | a 99.9
+
+------ DHT22
+
+https://randomnerdtutorials.com/esp8266-dht11dht22-temperature-and-humidity-web-server-with-arduino-ide/
+
+Libraries:
+	DHT sensor by AdaFruit
+	AdaFruit Unified Sensor
+
+serial	GPIO2   TX1/D9
+
