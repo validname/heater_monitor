@@ -4,11 +4,18 @@
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <ESP8266WiFi.h>
+// for OTA
+#include <ESP8266mDNS.h>
+#include <WiFiUdp.h>
+#include <ArduinoOTA.h>
 
 #include "WiFiSettings.h"
 // contains next settings:
 #define WIFI_SSID     CONFIG_WIFI_SSID
 #define WIFI_PASSWORD	CONFIG_WIFI_PASSWORD
+#define WIFI_OTA_PASSWORD CONFIG_OTA_PASSWORD
+
+const unsigned revision = 2;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -64,9 +71,6 @@ float airHumidity;
  Wi-Fi 
 */
 
-const char* ssid     = WIFI_SSID;
-const char* password = WIFI_PASSWORD;
-
 // Set web server port number to 80
 WiFiServer server(80);
 
@@ -107,7 +111,7 @@ void setup(void) {
 
   // Connect to Wi-Fi network with SSID and password
   Serial.print("Connecting to Wi-Fi network ");
-  Serial.println(ssid);
+  Serial.println(WIFI_SSID);
 
   if (!WiFi.config(local_IP, gateway, subnet)) {
     Serial.println("Failed to configure STATION mode!");
@@ -122,12 +126,65 @@ void setup(void) {
 	  lcd.print("to Wi-Fi...");
 	}
 
-  WiFi.begin(ssid, password);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
     lcd.print(".");
   }
+
+  ArduinoOTA.setHostname("heaterMonitor");
+  ArduinoOTA.setPassword(WIFI_OTA_PASSWORD);
+
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH) {
+      type = "sketch";
+    } else { // U_FS
+      type = "filesystem";
+    }
+
+    // NOTE: if updating FS this would be the place to unmount FS using FS.end()
+    Serial.println("Start updating " + type);
+    lcd.backlight();
+    lcd.setCursor(0, 0);
+    lcd.print("Start OTA");
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+    lcd.noBacklight();
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    lcd.setCursor(0, 1);
+    int tmp = (unsigned long) progress * 100 / total;
+    lcd.print("Progress: " + tmp);
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    lcd.setCursor(0, 0);
+    lcd.print("Error in OTA: " + error);
+    lcd.setCursor(0, 1);
+
+    if (error == OTA_AUTH_ERROR) {
+      Serial.println("Auth Failed");
+      lcd.print("Auth Failed");
+    } else if (error == OTA_BEGIN_ERROR) {
+      Serial.println("Begin Failed");
+      lcd.print("Begin Failed");
+    } else if (error == OTA_CONNECT_ERROR) {
+      Serial.println("Connect Failed");
+      lcd.print("Connect Failed");
+    } else if (error == OTA_RECEIVE_ERROR) {
+      Serial.println("Receive Failed");
+      lcd.print("Receive Failed");
+    } else if (error == OTA_END_ERROR) {
+      Serial.println("End Failed");
+      lcd.print("End Failed");
+    }
+  });
+  ArduinoOTA.begin();
+
   // Print local IP address and start web server
   Serial.println("");
   Serial.println("WiFi connected.");
@@ -188,6 +245,11 @@ void loop(void) {
     // save the last time you updated the sensor value
     previousSensorPollingTime = currentTime;
     
+    lcd.setCursor(7, 0);
+    lcd.print(" | ");
+    lcd.setCursor(7, 1);
+    lcd.print(" | ");
+
 		switch( currentSensor ) {
 			case 1:
 				if (DS18B20Sensors.requestTemperaturesByAddress(DS18B20SensorAddressInput)) {
@@ -316,6 +378,8 @@ void loop(void) {
 
   } else {
 
+    ArduinoOTA.handle();
+
 		// ###########  Wi-Fi block
     WiFiClient client = server.available();   // Listen for incoming clients
 
@@ -366,6 +430,9 @@ void loop(void) {
               } else if (header.indexOf("GET /maxHeatingTemperature") >= 0) {
                 Serial.println("Maximal heating temperature requested");
                 client.println(outputTemperature);
+              } else if (header.indexOf("GET /revision") >= 0) {
+                Serial.println("Revision requested");
+                client.println(revision);
               }
 
               client.println();
