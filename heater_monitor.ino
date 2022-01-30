@@ -17,9 +17,22 @@
 
 #define DEBUG
 #define DEBUG_COMMON
+#define DEBUG_COMMON_UDP
 //#define DEBUG_WEB
 
-const unsigned revision = 9;
+#ifdef DEBUG
+#ifdef DEBUG_COMMON_UDP
+#include <WiFiUdp.h>
+#define DEBUG_COMMON_UDP_BUFFER_LENGTH 256
+
+IPAddress udpDebugMulticastAddress(192, 168, 0, 255);
+WiFiUDP DebugUDP;
+char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
+#define UDP_DEBUG_PORT 5555
+#endif
+#endif
+
+const unsigned revision = 10;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -78,9 +91,9 @@ float airHumidity;
 // Set web server port number to 80
 WiFiServer server(80);
 
-IPAddress local_IP(192, 168, 0, 200);
-IPAddress gateway(192, 168, 0, 1);
-IPAddress subnet(255, 255, 255, 0);
+IPAddress WiFILocalIP(192, 168, 0, 200);
+IPAddress WiFIGateWay(192, 168, 0, 1);
+IPAddress WiFISubNetwork(255, 255, 255, 0);
 
 // Variable to store the HTTP request
 String header;
@@ -101,7 +114,7 @@ void setup(void) {
   // Connect to Wi-Fi network with SSID and password
   commonDebug("Connecting to Wi-Fi network" + (String)(WIFI_SSID));
 
-  if (!WiFi.config(local_IP, gateway, subnet)) {
+  if (!WiFi.config(WiFILocalIP, WiFIGateWay, WiFISubNetwork)) {
     commonDebug("Failed to configure STATION mode!");
 	  lcd.setCursor(0, 0);
 	  lcd.print("Failed configur");
@@ -464,14 +477,23 @@ const char *getHeaterStateString() {
 
 void setupDebug() {
 #ifdef DEBUG
+#ifndef DEBUG_UDP
   Serial.begin(115200);
+#endif
 #endif
 }
 
 void commonDebug(String buffer) {
 #ifdef DEBUG
 #ifdef DEBUG_COMMON
+#ifdef DEBUG_COMMON_UDP
+  buffer.toCharArray(DebugUDPBuffer, DEBUG_COMMON_UDP_BUFFER_LENGTH);
+  DebugUDP.beginPacketMulticast(udpDebugMulticastAddress, UDP_DEBUG_PORT, WiFILocalIP);
+  DebugUDP.write(DebugUDPBuffer);
+  DebugUDP.endPacket();
+#else
   Serial.println(buffer);
+#endif
 #endif
 #endif
 }
