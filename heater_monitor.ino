@@ -15,7 +15,11 @@
 #define WIFI_PASSWORD	CONFIG_WIFI_PASSWORD
 #define WIFI_OTA_PASSWORD CONFIG_OTA_PASSWORD
 
-const unsigned revision = 8;
+#define DEBUG
+#define DEBUG_COMMON
+//#define DEBUG_WEB
+
+const unsigned revision = 9;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -86,23 +90,8 @@ const long clientTimeout = 500;
 
 // --------------------------------------------------------------------
 
-const char *getHeaterStateString() {
-	switch( heaterState ) {
-		case 0:
-      return "unknown";
-		case 1:
-      return "cooling/idle";
-		case 2:
-      return "heatingUnknown";
-		case 3:
-      return "heatingRoom";
-		case 4:
-      return "heatingWater";
-	}
-}
-
 void setup(void) {
-  Serial.begin(115200);
+  setupDebug();
 
   lcd.init();
   lcd.backlight();
@@ -110,11 +99,10 @@ void setup(void) {
   WiFi.mode(WIFI_STA);
 
   // Connect to Wi-Fi network with SSID and password
-  Serial.print("Connecting to Wi-Fi network ");
-  Serial.println(WIFI_SSID);
+  commonDebug("Connecting to Wi-Fi network" + (String)(WIFI_SSID));
 
   if (!WiFi.config(local_IP, gateway, subnet)) {
-    Serial.println("Failed to configure STATION mode!");
+    commonDebug("Failed to configure STATION mode!");
 	  lcd.setCursor(0, 0);
 	  lcd.print("Failed configur");
 	  lcd.setCursor(0, 1);
@@ -129,7 +117,7 @@ void setup(void) {
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.print(".");
+    commonDebug(".");
     lcd.print(".");
   }
 
@@ -145,51 +133,51 @@ void setup(void) {
     }
 
     // NOTE: if updating FS this would be the place to unmount FS using FS.end()
-    Serial.println("Start updating " + type);
+    commonDebug("Start updating " + type);
     lcd.backlight();
     lcd.setCursor(0, 0);
     lcd.print("Start OTA");
   });
   ArduinoOTA.onEnd([]() {
-    Serial.println("\nEnd");
+    commonDebug("End OTA");
     lcd.noBacklight();
   });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-    lcd.setCursor(0, 1);
     int tmp = (unsigned long) progress * 100 / total;
+    commonDebug("Progress: " + tmp);
+    lcd.setCursor(0, 1);
     lcd.print("Progress: " + tmp);
   });
   ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
+    commonDebug("Error number: " + error);
     lcd.setCursor(0, 0);
     lcd.print("Error in OTA: " + error);
     lcd.setCursor(0, 1);
 
     if (error == OTA_AUTH_ERROR) {
-      Serial.println("Auth Failed");
+      commonDebug("Auth Failed");
       lcd.print("Auth Failed");
     } else if (error == OTA_BEGIN_ERROR) {
-      Serial.println("Begin Failed");
+      commonDebug("Begin Failed");
       lcd.print("Begin Failed");
     } else if (error == OTA_CONNECT_ERROR) {
-      Serial.println("Connect Failed");
+      commonDebug("Connect Failed");
       lcd.print("Connect Failed");
     } else if (error == OTA_RECEIVE_ERROR) {
-      Serial.println("Receive Failed");
+      commonDebug("Receive Failed");
       lcd.print("Receive Failed");
     } else if (error == OTA_END_ERROR) {
-      Serial.println("End Failed");
+      commonDebug("End Failed");
       lcd.print("End Failed");
     }
   });
   ArduinoOTA.begin();
 
   // Print local IP address and start web server
-  Serial.println("");
-  Serial.println("WiFi connected.");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  commonDebug("");
+  commonDebug("WiFi connected.");
+  commonDebug("IP address: ");
+  commonDebug(WiFi.localIP().toString());
   lcd.setCursor(0, 0);
   lcd.print("IP address:");
   lcd.setCursor(0, 1);
@@ -259,10 +247,8 @@ void loop(void) {
 					inputTemperatureSpeed = (inputTemperature - previuosInputTemperature) * 1000 / (double)oneSensorInterval;
 
 					printTemperatureAtLCD(inputTemperature, "i", 0, 0);
-					Serial.print("Temperature of heater input: ");
-					Serial.println(inputTemperature);
-					Serial.print("Temperature speed of heater input: ");
-					Serial.println(inputTemperatureSpeed);
+					commonDebug((String)("Temperature of heater input: ") + inputTemperature);
+					commonDebug((String)("Temperature speed of heater input: ") + inputTemperatureSpeed);
 				}
 				break;
 
@@ -274,10 +260,8 @@ void loop(void) {
 					outputTemperatureSpeed = (outputTemperature - previuosOutputTemperature) * 1000 / (double)oneSensorInterval;
 
 					printTemperatureAtLCD(outputTemperature, "o", 0, 1);
-					Serial.print("Temperature of heater output: ");
-					Serial.println(outputTemperature);
-					Serial.print("Temperature speed of heater output: ");
-					Serial.println(outputTemperatureSpeed);
+					commonDebug((String)("Temperature of heater output: ") + outputTemperature);
+					commonDebug((String)("Temperature speed of heater output: ") + outputTemperatureSpeed);
 				}
 				break;
 
@@ -289,10 +273,8 @@ void loop(void) {
 					waterTemperatureSpeed = (waterTemperature - previuosWaterTemperature) * 1000 / (double)oneSensorInterval;
 
 					printTemperatureAtLCD(waterTemperature, "w", 10, 0);
-					Serial.print("Temperature of hot water: ");
-					Serial.println(waterTemperature);
-					Serial.print("Temperature speed of heater water: ");
-					Serial.println(waterTemperatureSpeed);
+					commonDebug((String)("Temperature of hot water: ") + waterTemperature);
+					commonDebug((String)("Temperature speed of heater water: ") + waterTemperatureSpeed);
 				}
 				break;
 
@@ -300,11 +282,10 @@ void loop(void) {
 				airTemperature = dht22.readTemperature(); // Read temperature as Celsius (the default)
 				// Check if any reads failed and exit early (to try again).
 				if (isnan(airTemperature)) {
-					Serial.println(F("Failed to read from DHT sensor!"));
+					commonDebug("Failed to read from DHT sensor!");
 				} else {
           printTemperatureAtLCD(airTemperature, "a", 10, 1);
-          Serial.print("Temperature of air: ");
-          Serial.println(airTemperature);
+          commonDebug((String)("Temperature of air: ") + airTemperature);
 				}
 				break;
 
@@ -312,15 +293,14 @@ void loop(void) {
 				airHumidity = dht22.readHumidity(); // Reading temperature or humidity takes about 250 milliseconds! // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
 				// Check if any reads failed and exit early (to try again).
 				if (isnan(airHumidity)) {
-					Serial.println(F("Failed to read from DHT sensor!"));
+					commonDebug("Failed to read from DHT sensor!");
 				} else {
-          Serial.print("Humidity of air: ");
-          Serial.println(airHumidity);
+          commonDebug((String)("Humidity of air: ") + airHumidity);
 				}
 				break;
 		}
 
-    Serial.println("---- end of sensor polling");
+    commonDebug("---- end of sensor polling");
 
 		currentSensor++;
 		if (currentSensor > maxSensors)
@@ -359,10 +339,8 @@ void loop(void) {
 			}
 		}
 
-    Serial.print("Heater state (num): ");
-		Serial.println(heaterState);
-    Serial.print("Heater state: ");
-		Serial.println(getHeaterStateString());
+    commonDebug((String)("Heater state (num): ") + heaterState);
+    commonDebug((String)("Heater state: ") + getHeaterStateString());
 
 		if (heaterState == 1) { // cooling
 			if (outputTemperature <= minHeatingTemperature ) {
@@ -384,7 +362,7 @@ void loop(void) {
     WiFiClient client = server.available();   // Listen for incoming clients
 
     if (client) {                             // If a new client connects,
-      Serial.println("New Client.");          // print a message out in the serial port
+      webServerDebug("New Client.");          // print a message out in the serial port
       String currentLine = "";                // make a String to hold incoming data from the client
       currentTime = millis();
       previousClientTime = currentTime;
@@ -392,7 +370,7 @@ void loop(void) {
         currentTime = millis();         
         if (client.available()) {             // if there's bytes to read from the client,
           char c = client.read();             // read a byte, then
-          Serial.write(c);                    // print it out the serial monitor
+          webServerDebugByte(c);                    // print it out the serial monitor
           header += c;
           if (c == '\n') {                    // if the byte is a newline character
             // if the current line is blank, you got two newline characters in a row.
@@ -404,34 +382,34 @@ void loop(void) {
               client.println();
 
               if (header.indexOf("GET /inputTemperature") >= 0) {
-                Serial.println("Input temperature requested");
+                webServerDebug("Input temperature requested");
                 client.println(inputTemperature);
               } else if (header.indexOf("GET /outputTemperature") >= 0) {
-                Serial.println("Output temperature requested");
+                webServerDebug("Output temperature requested");
                 client.println(outputTemperature);
               } else if (header.indexOf("GET /waterTemperature") >= 0) {
-                Serial.println("Water temperature requested");
+                webServerDebug("Water temperature requested");
                 client.println(waterTemperature);
               } else if (header.indexOf("GET /airTemperature") >= 0) {
-                Serial.println("Air temperature requested");
+                webServerDebug("Air temperature requested");
                 client.println(airTemperature);
               } else if (header.indexOf("GET /airHumidity") >= 0) {
-                Serial.println("Air humidity requested");
+                webServerDebug("Air humidity requested");
                 client.println(airHumidity);
               } else if (header.indexOf("GET /heaterState") >= 0) {
-                Serial.println("Heater state requested");
+                webServerDebug("Heater state requested");
                 client.println(heaterState);
               } else if (header.indexOf("GET /heatingInterval") >= 0) {
-                Serial.println("Heating interval requested");
+                webServerDebug("Heating interval requested");
                 client.println(outputTemperature);
               } else if (header.indexOf("GET /minHeatingTemperature") >= 0) {
-                Serial.println("Minimal heating temperature requested");
+                webServerDebug("Minimal heating temperature requested");
                 client.println(outputTemperature);
               } else if (header.indexOf("GET /maxHeatingTemperature") >= 0) {
-                Serial.println("Maximal heating temperature requested");
+                webServerDebug("Maximal heating temperature requested");
                 client.println(outputTemperature);
               } else if (header.indexOf("GET /revision") >= 0) {
-                Serial.println("Revision requested");
+                webServerDebug("Revision requested");
                 client.println(revision);
               }
 
@@ -452,8 +430,7 @@ void loop(void) {
       header = "";
       // Close the connection
       client.stop();
-      Serial.println("Client disconnected.");
-      Serial.println("");
+      webServerDebug("Client disconnected.");
     }
   }
 }
@@ -468,6 +445,51 @@ o 99.9 | a 99.9
   lcd.print(name + " ");
   lcd.setCursor(column+2, row);
   lcd.print(temperature);
+}
+
+const char *getHeaterStateString() {
+  switch( heaterState ) {
+    case 0:
+      return "unknown";
+    case 1:
+      return "cooling/idle";
+    case 2:
+      return "heatingUnknown";
+    case 3:
+      return "heatingRoom";
+    case 4:
+      return "heatingWater";
+  }
+}
+
+void setupDebug() {
+#ifdef DEBUG
+  Serial.begin(115200);
+#endif
+}
+
+void commonDebug(String buffer) {
+#ifdef DEBUG
+#ifdef DEBUG_COMMON
+  Serial.println(buffer);
+#endif
+#endif
+}
+
+void webServerDebug(String buffer) {
+#ifdef DEBUG
+#ifdef DEBUG_WEB
+  Serial.println(buffer);
+#endif
+#endif
+}
+
+void webServerDebugByte(char buffer) {
+#ifdef DEBUG
+#ifdef DEBUG_WEB
+  Serial.print(buffer);
+#endif
+#endif
 }
 
 // vim: ts=2 sts=2 sw=2
