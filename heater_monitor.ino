@@ -15,7 +15,7 @@
 #define WIFI_PASSWORD	CONFIG_WIFI_PASSWORD
 #define WIFI_OTA_PASSWORD CONFIG_OTA_PASSWORD
 
-const unsigned revision = 2;
+const unsigned revision = 8;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -38,14 +38,14 @@ DeviceAddress DS18B20SensorAddressOutput = { 0x28, 0xA5, 0x0D, 0x75, 0xD0, 0x01,
 DeviceAddress DS18B20SensorAddressWater = { 0x28, 0xD2, 0x5D, 0x07, 0xD6, 0x01, 0x3C, 0x5A };
 
 const float outputSpeedHeatingThreshold = 0.03;
-const float outputSpeedCoolingThreshold = -0.01;
+const float outputSpeedCoolingThreshold = -0.02;
 const float inputSpeedHeatingThreshold = 0.02;
-const float waterSpeedHeatingThreshold = 0.01;
+const float waterSpeedHeatingThreshold = 0.02;
 const float heatingCicleTimeCorrectionFraction = 0.1;	// from 0 to 1
 
-float inputTemperature, previuosInputTemperature, inputTemperatureSpeed;
-float outputTemperature, previuosOutputTemperature, outputTemperatureSpeed;
-float waterTemperature, previuosWaterTemperature, waterTemperatureSpeed;
+double inputTemperature, previuosInputTemperature, inputTemperatureSpeed;
+double outputTemperature, previuosOutputTemperature, outputTemperatureSpeed;
+double waterTemperature, previuosWaterTemperature, waterTemperatureSpeed;
 
 unsigned long heatingStartTime, prevHeatingStartTime;
 unsigned int heatingInterval; // in seconds
@@ -134,7 +134,7 @@ void setup(void) {
   }
 
   ArduinoOTA.setHostname("heaterMonitor");
-  ArduinoOTA.setPassword(WIFI_OTA_PASSWORD);
+  //ArduinoOTA.setPassword(WIFI_OTA_PASSWORD);
 
   ArduinoOTA.onStart([]() {
     String type;
@@ -256,7 +256,7 @@ void loop(void) {
 
 					previuosInputTemperature = inputTemperature;
 					inputTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressInput);
-					inputTemperatureSpeed = (inputTemperature - previuosInputTemperature) / oneSensorInterval;
+					inputTemperatureSpeed = (inputTemperature - previuosInputTemperature) * 1000 / (double)oneSensorInterval;
 
 					printTemperatureAtLCD(inputTemperature, "i", 0, 0);
 					Serial.print("Temperature of heater input: ");
@@ -271,7 +271,7 @@ void loop(void) {
 
 					previuosOutputTemperature = outputTemperature;
 					outputTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressOutput);
-					outputTemperatureSpeed = (outputTemperature - previuosOutputTemperature) / oneSensorInterval;
+					outputTemperatureSpeed = (outputTemperature - previuosOutputTemperature) * 1000 / (double)oneSensorInterval;
 
 					printTemperatureAtLCD(outputTemperature, "o", 0, 1);
 					Serial.print("Temperature of heater output: ");
@@ -286,7 +286,7 @@ void loop(void) {
 
 					previuosWaterTemperature = waterTemperature;
 					waterTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressWater);
-					waterTemperatureSpeed = (waterTemperature - previuosWaterTemperature) / oneSensorInterval;
+					waterTemperatureSpeed = (waterTemperature - previuosWaterTemperature) * 1000 / (double)oneSensorInterval;
 
 					printTemperatureAtLCD(waterTemperature, "w", 10, 0);
 					Serial.print("Temperature of hot water: ");
