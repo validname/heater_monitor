@@ -4,12 +4,12 @@
 for Wemos D1 clone:
 
 	clone/R1	real	+5V	func	
-GPIO0	D8		D3	+	- / 10k Pull-up
-GPIO1	TX/D1		TX	+	(Serial console)
-GPIO2	TX1/D9		D4	+	TX1 / 10k Pull-up, BUILTIN_LED
-GPIO3	RX/D0		RX	+	(Serial console)
-GPIO4	D14/SDA/D4	D2	+	I2C Bus SDA (data)
-GPIO5	D15/SCL/D3	D1	+	I2C Bus SCL (clock)
++GPIO0	D8		D3	+	IO / 10k Pull-up (boot fails if pulled LOW)
+GPIO1	TX/D1		TX	+	(Serial console, debug output at boot, pin is high at BOOT, boot fails if pulled LOW)
++GPIO2	TX1/D9		D4	+	TX1 / BUILTIN_LED / 10k Pull-up (pin is high on BOOT, boot fails if pulled LOW)
+GPIO3	RX/D0		RX	+	(Serial console, pin is high at BOOT)
++GPIO4	D14/SDA/D4	D2	+	I2C Bus SDA (data)
++GPIO5	D15/SCL/D3	D1	+	I2C Bus SCL (clock)
 GPIO6	-		-	-	(internal/flash)
 GPIO7	-		-	-	(internal/flash)
 GPIO8	-		-	-	(internal/flash)
@@ -19,12 +19,22 @@ GPIO11	-		-	-	(internal/flash)
 GPIO12	D12/MISO/D6	D6	+	SPI Bus MISO
 GPIO13	D11/MOSI/D7	D7	+	SPI Bus MOSI
 GPIO14	D13/SCK/D5	D5	+	SPI Bus SCK (clock)
-GPIO15	D10/SS		D8	+	SPI Bus SS (CS)
-GPIO16	D2		D0	+	-
+GPIO15	D10/SS		D8	+	SPI Bus SS (CS) / 10k Pull-down (Boot fails if pulled HIGH)
+GPIO16	D2		D0	+	IO / pin is high at BOOT
 
 https://github.com/esp8266/Arduino/blob/2.5.0-beta2/variants/d1/pins_arduino.h#L38-L53
 https://cyaninfinite.com/getting-started-with-the-wemos-d1-esp8266-wifi-board/
 https://www.instructables.com/NodeMCU-ESP8266-Details-and-Pinout/
+
+GPIO4 and GPIO5 are the most safe to use GPIOs if you want to operate relays.
+
+----- internal pullup resistors
+
+The value of internal pull-up resistor is between 30Kohm and 100Kohm.
+https://bbs.espressif.com/viewtopic.php?t=1079
+
+GPIO with internall pullup: 0-5 + 9-10 + 12-16
+GPIO wo: 6-8, 11
 
 ----- ESP8266 Arduino
 
@@ -65,4 +75,14 @@ Libraries:
 	AdaFruit Unified Sensor
 
 serial	GPIO2   TX1/D9
+
+------ ? relay ?
+
+
+----- decision algorythm
+
+если котел сейчас:
+	1) явно не нагревает И
+	2) прошло 120% времени цикла от прошлого нагрева,
+то его нужно принудительно включить
 

@@ -11,9 +11,11 @@
 #define WIFI_PASSWORD	CONFIG_WIFI_PASSWORD
 
 // updates some sensor every N milliseconds
-const long SensorInterval = 1000;
-const int maxSensors = 5;
-int currentSensor;
+const unsigned int sensorPollingInterval = 1000;
+const unsigned int maxSensors = 5;
+unsigned long previousSensorPollingTime = 0;
+unsigned int currentSensor;
+unsigned int oneSensorInterval;
 
 /*
   DS18B20 settings
@@ -28,7 +30,20 @@ DeviceAddress DS18B20SensorAddressInput = { 0x28, 0x4F, 0x1B, 0x07, 0xD6, 0x01, 
 DeviceAddress DS18B20SensorAddressOutput = { 0x28, 0xA5, 0x0D, 0x75, 0xD0, 0x01, 0x3C, 0xAC };
 DeviceAddress DS18B20SensorAddressWater = { 0x28, 0xD2, 0x5D, 0x07, 0xD6, 0x01, 0x3C, 0x5A };
 
-float inputTemperature, outputTemperature, waterTemperature;
+const float outputSpeedHeatingThreshold = 0.03;
+const float outputSpeedCoolingThreshold = -0.01;
+const float inputSpeedHeatingThreshold = 0.02;
+const float waterSpeedHeatingThreshold = 0.01;
+const float heatingCicleTimeCorrectionFraction = 0.1;	// from 0 to 1
+
+float inputTemperature, previuosInputTemperature, inputTemperatureSpeed;
+float outputTemperature, previuosOutputTemperature, outputTemperatureSpeed;
+float waterTemperature, previuosWaterTemperature, waterTemperatureSpeed;
+
+unsigned long heatingStartTime, prevHeatingStartTime;
+unsigned int heatingInterval; // in seconds
+unsigned int heaterState;
+float minHeatingTemperature, maxHeatingTemperature;
 
 /*
  LCD 1602 settings
@@ -62,12 +77,25 @@ IPAddress subnet(255, 255, 255, 0);
 // Variable to store the HTTP request
 String header;
 
-unsigned long currentTime = millis();
-unsigned long previousSensorTime = 0; 
 unsigned long previousClientTime = 0; 
-const long ClientTimeoutTime = 500;
+const long clientTimeout = 500;
 
 // --------------------------------------------------------------------
+
+const char *getHeaterStateString() {
+	switch( heaterState ) {
+		case 0:
+      return "unknown";
+		case 1:
+      return "cooling/idle";
+		case 2:
+      return "heatingUnknown";
+		case 3:
+      return "heatingRoom";
+		case 4:
+      return "heatingWater";
+	}
+}
 
 void setup(void) {
   Serial.begin(115200);
@@ -83,12 +111,16 @@ void setup(void) {
 
   if (!WiFi.config(local_IP, gateway, subnet)) {
     Serial.println("Failed to configure STATION mode!");
-  }
-
-  lcd.setCursor(0, 0);
-  lcd.print("Connecting");
-  lcd.setCursor(0, 1);
-  lcd.print("to Wi-Fi...");
+	  lcd.setCursor(0, 0);
+	  lcd.print("Failed configur");
+	  lcd.setCursor(0, 1);
+	  lcd.print("-ing Wi-Fi!");
+  } else {
+	  lcd.setCursor(0, 0);
+	  lcd.print("Connecting");
+	  lcd.setCursor(0, 1);
+	  lcd.print("to Wi-Fi...");
+	}
 
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -123,40 +155,83 @@ void setup(void) {
   currentSensor = 1;
 
 	inputTemperature = NAN;
+	previuosInputTemperature = NAN;
+	inputTemperatureSpeed = NAN;
+
 	outputTemperature = NAN;
+	previuosOutputTemperature = NAN;
+	outputTemperatureSpeed = NAN;
+
 	waterTemperature = NAN;
+	previuosWaterTemperature = NAN;
+	waterTemperatureSpeed = NAN;
+
 	airTemperature = NAN;
 	airHumidity = NAN;
+
+	oneSensorInterval = sensorPollingInterval * maxSensors;
+
+	heatingStartTime = 0;
+	prevHeatingStartTime = 0;
+	heatingInterval = 0;
+	heaterState = 0;
+
+	minHeatingTemperature = 100; // certainly big number
+	maxHeatingTemperature = 0;
 }
 
 void loop(void) {
+  unsigned int tmpHeatingInterval;
   unsigned long currentTime = millis();
-  if (currentTime - previousSensorTime  >= SensorInterval) {
+
+  if (currentTime - previousSensorPollingTime  >= sensorPollingInterval) {
     // save the last time you updated the sensor value
-    previousSensorTime = currentTime;
+    previousSensorPollingTime = currentTime;
     
 		switch( currentSensor ) {
 			case 1:
-				DS18B20Sensors.requestTemperatures(); // Send the command to get temperatures
+				if (DS18B20Sensors.requestTemperaturesByAddress(DS18B20SensorAddressInput)) {
 
-				inputTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressInput);
-				printTemperatureAtLCD(inputTemperature, "i", 0, 0);
-				Serial.print("Temperature of heater input: ");
-				Serial.println(inputTemperature);
+					previuosInputTemperature = inputTemperature;
+					inputTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressInput);
+					inputTemperatureSpeed = (inputTemperature - previuosInputTemperature) / oneSensorInterval;
+
+					printTemperatureAtLCD(inputTemperature, "i", 0, 0);
+					Serial.print("Temperature of heater input: ");
+					Serial.println(inputTemperature);
+					Serial.print("Temperature speed of heater input: ");
+					Serial.println(inputTemperatureSpeed);
+				}
 				break;
 
 			case 2:
-				outputTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressOutput);
-				printTemperatureAtLCD(outputTemperature, "o", 0, 1);
-				Serial.print("Temperature of heater output: ");
-				Serial.println(outputTemperature);
+				if (DS18B20Sensors.requestTemperaturesByAddress(DS18B20SensorAddressOutput)) {
+
+					previuosOutputTemperature = outputTemperature;
+					outputTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressOutput);
+					outputTemperatureSpeed = (outputTemperature - previuosOutputTemperature) / oneSensorInterval;
+
+					printTemperatureAtLCD(outputTemperature, "o", 0, 1);
+					Serial.print("Temperature of heater output: ");
+					Serial.println(outputTemperature);
+					Serial.print("Temperature speed of heater output: ");
+					Serial.println(outputTemperatureSpeed);
+				}
 				break;
 
 			case 3:
-				waterTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressWater);
-				printTemperatureAtLCD(waterTemperature, "w", 10, 0);
-				Serial.print("Temperature of hot water: ");
-				Serial.println(waterTemperature);
+				if (DS18B20Sensors.requestTemperaturesByAddress(DS18B20SensorAddressWater)) {
+
+					previuosWaterTemperature = waterTemperature;
+					waterTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressWater);
+					waterTemperatureSpeed = (waterTemperature - previuosWaterTemperature) / oneSensorInterval;
+
+					printTemperatureAtLCD(waterTemperature, "w", 10, 0);
+					Serial.print("Temperature of hot water: ");
+					Serial.println(waterTemperature);
+					Serial.print("Temperature speed of heater water: ");
+					Serial.println(waterTemperatureSpeed);
+				}
 				break;
 
 			case 4:
@@ -189,8 +264,59 @@ void loop(void) {
 		if (currentSensor > maxSensors)
 			currentSensor = 1;
 
+		// ############ do some math and evaluate heater state
+
+		if (outputTemperatureSpeed <= outputSpeedCoolingThreshold ) {
+			heaterState = 1;	// cooling / idle
+		}
+		if (waterTemperatureSpeed >= waterSpeedHeatingThreshold ) {
+			heaterState = 4;	// heat water, most precedence over other heating modes
+		}
+		if (outputTemperatureSpeed >= outputSpeedHeatingThreshold ) {
+			if ( heaterState == 1 ) {
+				heaterState = 2;	// some heating mode: either room or water
+				heatingStartTime = currentTime;
+			}
+		}
+		if (inputTemperatureSpeed >= inputSpeedHeatingThreshold ) {
+			if ( heaterState == 2 ) {
+				heaterState = 3;	// heat room
+
+				// calculate heatingInterval;
+
+				if (heatingInterval == 0) {	// first or second cicle
+					if ( prevHeatingStartTime > 0 ) { // certainly second cicle
+						heatingInterval = (heatingStartTime -  prevHeatingStartTime) / 1000;
+					}
+				} else {
+					tmpHeatingInterval = (heatingStartTime -  prevHeatingStartTime) / 1000;
+					heatingInterval = (1 - heatingCicleTimeCorrectionFraction/2)* heatingInterval + heatingCicleTimeCorrectionFraction/2 * tmpHeatingInterval;
+				}
+
+				prevHeatingStartTime = heatingStartTime;
+			}
+		}
+
+    Serial.print("Heater state (num): ");
+		Serial.println(heaterState);
+    Serial.print("Heater state: ");
+		Serial.println(getHeaterStateString());
+
+		if (heaterState == 1) { // cooling
+			if (outputTemperature <= minHeatingTemperature ) {
+				minHeatingTemperature = outputTemperature;
+			}
+		}
+
+		if (heaterState == 3) { // heat room
+			if (outputTemperature >= maxHeatingTemperature ) {
+				maxHeatingTemperature = outputTemperature;
+			}
+		}
+
   } else {
 
+		// ###########  Wi-Fi block
     WiFiClient client = server.available();   // Listen for incoming clients
 
     if (client) {                             // If a new client connects,
@@ -198,7 +324,7 @@ void loop(void) {
       String currentLine = "";                // make a String to hold incoming data from the client
       currentTime = millis();
       previousClientTime = currentTime;
-      while (client.connected() && currentTime - previousClientTime <= ClientTimeoutTime) { // loop while the client's connected
+      while (client.connected() && currentTime - previousClientTime <= clientTimeout) { // loop while the client's connected
         currentTime = millis();         
         if (client.available()) {             // if there's bytes to read from the client,
           char c = client.read();             // read a byte, then
@@ -228,6 +354,18 @@ void loop(void) {
               } else if (header.indexOf("GET /airHumidity") >= 0) {
                 Serial.println("Air humidity requested");
                 client.println(airHumidity);
+              } else if (header.indexOf("GET /heaterState") >= 0) {
+                Serial.println("Heater state requested");
+                client.println(heaterState);
+              } else if (header.indexOf("GET /heatingInterval") >= 0) {
+                Serial.println("Heating interval requested");
+                client.println(outputTemperature);
+              } else if (header.indexOf("GET /minHeatingTemperature") >= 0) {
+                Serial.println("Minimal heating temperature requested");
+                client.println(outputTemperature);
+              } else if (header.indexOf("GET /maxHeatingTemperature") >= 0) {
+                Serial.println("Maximal heating temperature requested");
+                client.println(outputTemperature);
               }
 
               client.println();
