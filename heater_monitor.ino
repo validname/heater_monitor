@@ -32,7 +32,7 @@ char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
 #endif
 #endif
 
-const unsigned revision = 14;
+const unsigned revision = 15;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -237,8 +237,8 @@ void setup(void) {
   lastForcedHeatingDelay = 0;
   heaterState = 0;
 
-	minHeatingTemperature = 100; // certainly big number
-	maxHeatingTemperature = 0;
+	minHeatingTemperature = NAN;
+	maxHeatingTemperature = NAN;
 }
 
 void loop(void) {
@@ -376,7 +376,7 @@ void loop(void) {
 				minHeatingTemperature = (minHeatingTemperature + outputTemperature)/2;
 			}
 
-      if( currentTime > prevHeatingStartTime + heatingInterval * forceHeatingIntervalFraction ){
+      if( heatingInterval > 0 && currentTime > prevHeatingStartTime + heatingInterval * forceHeatingIntervalFraction ){
         commonDebug("Start forced room heating!");
         lastForcedHeatingDelay = 0;
       }
@@ -423,37 +423,57 @@ void loop(void) {
 
               if (header.indexOf("GET /inputTemperature") >= 0) {
                 webServerDebug("Input temperature requested");
-                client.println(inputTemperature);
+                if( isnan(inputTemperature)==false ) {
+                  client.println(inputTemperature);
+                }
               } else if (header.indexOf("GET /outputTemperature") >= 0) {
                 webServerDebug("Output temperature requested");
-                client.println(outputTemperature);
+                if( isnan(outputTemperature)==false ) {
+                  client.println(outputTemperature);
+                }
               } else if (header.indexOf("GET /waterTemperature") >= 0) {
                 webServerDebug("Water temperature requested");
-                client.println(waterTemperature);
+                if( isnan(waterTemperature)==false ) {
+                  client.println(waterTemperature);
+                }
               } else if (header.indexOf("GET /airTemperature") >= 0) {
                 webServerDebug("Air temperature requested");
-                client.println(airTemperature);
+                if( isnan(airTemperature)==false ) {
+                  client.println(airTemperature);
+                }
               } else if (header.indexOf("GET /airHumidity") >= 0) {
                 webServerDebug("Air humidity requested");
-                client.println(airHumidity);
+                if( isnan(airHumidity)==false ) {
+                  client.println(airHumidity);
+                }
               } else if (header.indexOf("GET /heaterState") >= 0) {
                 webServerDebug("Heater state requested");
                 client.println(heaterState);
               } else if (header.indexOf("GET /heatingInterval") >= 0) {
                 webServerDebug("Heating interval requested");
-                client.println(heatingInterval);
+                if( heatingInterval > 0 ) {
+                  client.println(heatingInterval);
+                }
               } else if (header.indexOf("GET /minHeatingTemperature") >= 0) {
                 webServerDebug("Minimal heating temperature requested");
-                client.println(minHeatingTemperature);
+                if( isnan(minHeatingTemperature)==false ) {
+                  client.println(minHeatingTemperature);
+                }
               } else if (header.indexOf("GET /maxHeatingTemperature") >= 0) {
                 webServerDebug("Maximal heating temperature requested");
-                client.println(maxHeatingTemperature);
+                if( isnan(maxHeatingTemperature)==false ) {
+                  client.println(maxHeatingTemperature);
+                }
               } else if (header.indexOf("GET /lastHeatingDelay") >= 0) {
                 webServerDebug("Last heating delay requested");
-                client.println(lastHeatingDelay);
+                if( lastHeatingDelay > 0 ) {
+                  client.println(lastHeatingDelay);
+                }
               } else if (header.indexOf("GET /lastForcedHeatingDelay") >= 0) {
                 webServerDebug("Last forced heating delay requested");
-                client.println(lastForcedHeatingDelay);
+                if( lastForcedHeatingDelay > 0 ) {
+                  client.println(lastForcedHeatingDelay);
+                }
               } else if (header.indexOf("GET /revision") >= 0) {
                 webServerDebug("Revision requested");
                 client.println(revision);
