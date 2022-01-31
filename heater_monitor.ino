@@ -32,7 +32,7 @@ char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
 #endif
 #endif
 
-const unsigned revision = 15;
+const unsigned revision = 16;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -466,14 +466,10 @@ void loop(void) {
                 }
               } else if (header.indexOf("GET /lastHeatingDelay") >= 0) {
                 webServerDebug("Last heating delay requested");
-                if( lastHeatingDelay > 0 ) {
-                  client.println(lastHeatingDelay);
-                }
+                client.println(lastHeatingDelay);
               } else if (header.indexOf("GET /lastForcedHeatingDelay") >= 0) {
                 webServerDebug("Last forced heating delay requested");
-                if( lastForcedHeatingDelay > 0 ) {
-                  client.println(lastForcedHeatingDelay);
-                }
+                client.println(lastForcedHeatingDelay);
               } else if (header.indexOf("GET /revision") >= 0) {
                 webServerDebug("Revision requested");
                 client.println(revision);
