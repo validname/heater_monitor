@@ -32,7 +32,7 @@ char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
 #endif
 #endif
 
-const unsigned revision = 13;
+const unsigned revision = 14;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -331,9 +331,7 @@ void loop(void) {
 
     // decisions based on previous state
     lastForcedHeatingDelay += sensorPollingInterval/1000;
-    if (heaterState == 3) { // heat room
-      lastHeatingDelay += sensorPollingInterval/1000;
-    }
+    lastHeatingDelay += sensorPollingInterval/1000;
 
     // new state evaluation
 		if (outputTemperatureSpeed <= outputSpeedCoolingThreshold ) {
