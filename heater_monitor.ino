@@ -245,6 +245,8 @@ void loop(void) {
   unsigned int tmpHeatingInterval;
   unsigned long currentTime = millis();
 
+  commonDebug("loop() start.");
+
   if (currentTime < previousSensorPollingTime) {
     previousSensorPollingTime = currentTime;
     return; // protect from counter overflow
@@ -320,8 +322,6 @@ void loop(void) {
 				}
 				break;
 		}
-
-    commonDebug("---- end of sensor polling");
 
 		currentSensor++;
 		if (currentSensor > maxSensors)
