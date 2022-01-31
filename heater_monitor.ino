@@ -32,7 +32,7 @@ char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
 #endif
 #endif
 
-const unsigned revision = 12;
+const unsigned revision = 13;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -59,13 +59,14 @@ const float outputSpeedCoolingThreshold = -0.02;
 const float inputSpeedHeatingThreshold = 0.02;
 const float waterSpeedHeatingThreshold = 0.02;
 const float heatingCicleTimeCorrectionFraction = 0.1;	// from 0 to 1
+const float forceHeatingIntervalFraction = 2; // from 1 to beyond
 
 double inputTemperature, previuosInputTemperature, inputTemperatureSpeed;
 double outputTemperature, previuosOutputTemperature, outputTemperatureSpeed;
 double waterTemperature, previuosWaterTemperature, waterTemperatureSpeed;
 
 unsigned long heatingStartTime, prevHeatingStartTime;
-unsigned int heatingInterval; // in seconds
+unsigned int heatingInterval, lastHeatingDelay, lastForcedHeatingDelay; // in seconds
 unsigned int heaterState;
 float minHeatingTemperature, maxHeatingTemperature;
 
@@ -232,7 +233,9 @@ void setup(void) {
 	heatingStartTime = 0;
 	prevHeatingStartTime = 0;
 	heatingInterval = 0;
-	heaterState = 0;
+  lastHeatingDelay = 0;
+  lastForcedHeatingDelay = 0;
+  heaterState = 0;
 
 	minHeatingTemperature = 100; // certainly big number
 	maxHeatingTemperature = 0;
@@ -326,6 +329,13 @@ void loop(void) {
 
 		// ############ do some math and evaluate heater state
 
+    // decisions based on previous state
+    lastForcedHeatingDelay += sensorPollingInterval/1000;
+    if (heaterState == 3) { // heat room
+      lastHeatingDelay += sensorPollingInterval/1000;
+    }
+
+    // new state evaluation
 		if (outputTemperatureSpeed <= outputSpeedCoolingThreshold ) {
 			heaterState = 1;	// cooling / idle
 		}
@@ -341,9 +351,9 @@ void loop(void) {
 		if (inputTemperatureSpeed >= inputSpeedHeatingThreshold ) {
 			if ( heaterState == 2 ) {
 				heaterState = 3;	// heat room
+        lastHeatingDelay = 0;
 
 				// calculate heatingInterval;
-
 				if (heatingInterval == 0) {	// first or second cicle
 					if ( prevHeatingStartTime > 0 ) { // certainly second cicle
 						heatingInterval = (heatingStartTime -  prevHeatingStartTime) / 1000;
@@ -362,15 +372,21 @@ void loop(void) {
     commonDebug((String)("Heater state (num): ") + heaterState);
     commonDebug((String)("Heater state: ") + getHeaterStateString());
 
+    // decisions based on new state
 		if (heaterState == 1) { // cooling
 			if (outputTemperature <= minHeatingTemperature ) {
-				minHeatingTemperature = outputTemperature;
+				minHeatingTemperature = (minHeatingTemperature + outputTemperature)/2;
 			}
+
+      if( currentTime > prevHeatingStartTime + heatingInterval * forceHeatingIntervalFraction ){
+        commonDebug("Start forced room heating!");
+        lastForcedHeatingDelay = 0;
+      }
 		}
 
 		if (heaterState == 3) { // heat room
 			if (outputTemperature >= maxHeatingTemperature ) {
-				maxHeatingTemperature = outputTemperature;
+				maxHeatingTemperature = (maxHeatingTemperature + outputTemperature)/2;
 			}
 		}
 
@@ -434,6 +450,12 @@ void loop(void) {
               } else if (header.indexOf("GET /maxHeatingTemperature") >= 0) {
                 webServerDebug("Maximal heating temperature requested");
                 client.println(maxHeatingTemperature);
+              } else if (header.indexOf("GET /lastHeatingDelay") >= 0) {
+                webServerDebug("Last heating delay requested");
+                client.println(lastHeatingDelay);
+              } else if (header.indexOf("GET /lastForcedHeatingDelay") >= 0) {
+                webServerDebug("Last forced heating delay requested");
+                client.println(lastForcedHeatingDelay);
               } else if (header.indexOf("GET /revision") >= 0) {
                 webServerDebug("Revision requested");
                 client.println(revision);
