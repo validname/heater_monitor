@@ -32,7 +32,7 @@ char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
 #endif
 #endif
 
-const unsigned revision = 11;
+const unsigned revision = 12;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -242,6 +242,11 @@ void loop(void) {
   unsigned int tmpHeatingInterval;
   unsigned long currentTime = millis();
 
+  if (currentTime < previousSensorPollingTime) {
+    previousSensorPollingTime = currentTime;
+    return; // protect from counter overflow
+  }
+
   if (currentTime - previousSensorPollingTime  >= sensorPollingInterval) {
     // save the last time you updated the sensor value
     previousSensorPollingTime = currentTime;
@@ -344,8 +349,10 @@ void loop(void) {
 						heatingInterval = (heatingStartTime -  prevHeatingStartTime) / 1000;
 					}
 				} else {
-					tmpHeatingInterval = (heatingStartTime -  prevHeatingStartTime) / 1000;
-					heatingInterval = (1 - heatingCicleTimeCorrectionFraction/2)* heatingInterval + heatingCicleTimeCorrectionFraction/2 * tmpHeatingInterval;
+          if (heatingStartTime >  prevHeatingStartTime) { // protect from counter overflow
+					  tmpHeatingInterval = (heatingStartTime -  prevHeatingStartTime) / 1000;
+					  heatingInterval = (1 - heatingCicleTimeCorrectionFraction/2)* heatingInterval + heatingCicleTimeCorrectionFraction/2 * tmpHeatingInterval;
+          }
 				}
 
 				prevHeatingStartTime = heatingStartTime;
@@ -380,7 +387,13 @@ void loop(void) {
       currentTime = millis();
       previousClientTime = currentTime;
       while (client.connected() && currentTime - previousClientTime <= clientTimeout) { // loop while the client's connected
-        currentTime = millis();         
+        currentTime = millis();
+        if (currentTime < previousClientTime ) { // counter overflow
+          header = ""; // just break this session
+          client.stop();
+          webServerDebug("Break sesson due time counter overflow.");
+          break;
+        }
         if (client.available()) {             // if there's bytes to read from the client,
           char c = client.read();             // read a byte, then
           webServerDebugByte(c);                    // print it out the serial monitor
