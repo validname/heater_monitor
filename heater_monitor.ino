@@ -32,7 +32,7 @@ char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
 #endif
 #endif
 
-const unsigned revision = 16;
+const unsigned firmwareRevision = 17;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -372,7 +372,10 @@ void loop(void) {
 
     // decisions based on new state
 		if (heaterState == 1) { // cooling
-			if (outputTemperature <= minHeatingTemperature ) {
+      if (isnan(minHeatingTemperature)) {
+        minHeatingTemperature = outputTemperature;
+      }
+			else if (outputTemperature <= minHeatingTemperature) {
 				minHeatingTemperature = (minHeatingTemperature + outputTemperature)/2;
 			}
 
@@ -383,7 +386,9 @@ void loop(void) {
 		}
 
 		if (heaterState == 3) { // heat room
-			if (outputTemperature >= maxHeatingTemperature ) {
+      if (isnan(maxHeatingTemperature)) {
+        maxHeatingTemperature = outputTemperature;
+      } else if (outputTemperature >= maxHeatingTemperature) {
 				maxHeatingTemperature = (maxHeatingTemperature + outputTemperature)/2;
 			}
 		}
@@ -471,8 +476,8 @@ void loop(void) {
                 webServerDebug("Last forced heating delay requested");
                 client.println(lastForcedHeatingDelay);
               } else if (header.indexOf("GET /revision") >= 0) {
-                webServerDebug("Revision requested");
-                client.println(revision);
+                webServerDebug("Firmware revision requested");
+                client.println(firmwareRevision );
               }
 
               client.println();
