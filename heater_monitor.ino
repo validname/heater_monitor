@@ -32,7 +32,7 @@ char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
 #endif
 #endif
 
-const unsigned firmwareRevision = 18;
+const unsigned firmwareRevision = 20;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -54,7 +54,7 @@ DeviceAddress DS18B20SensorAddressInput = { 0x28, 0x4F, 0x1B, 0x07, 0xD6, 0x01, 
 DeviceAddress DS18B20SensorAddressOutput = { 0x28, 0xA5, 0x0D, 0x75, 0xD0, 0x01, 0x3C, 0xAC };
 DeviceAddress DS18B20SensorAddressWater = { 0x28, 0xD2, 0x5D, 0x07, 0xD6, 0x01, 0x3C, 0x5A };
 
-const float outputSpeedHeatingThreshold = 0.03;
+const float outputSpeedHeatingThreshold = 0.02;
 const float outputSpeedCoolingThreshold = -0.02;
 const float inputSpeedHeatingThreshold = 0.02;
 const float waterSpeedHeatingThreshold = 0.02;
@@ -65,10 +65,16 @@ double inputTemperature, previuosInputTemperature, inputTemperatureSpeed;
 double outputTemperature, previuosOutputTemperature, outputTemperatureSpeed;
 double waterTemperature, previuosWaterTemperature, waterTemperatureSpeed;
 
-unsigned long heatingStartTime, prevHeatingStartTime;
-unsigned int heatingInterval, lastHeatingDelay, lastForcedHeatingDelay; // in seconds
+unsigned long heatingStartTime, prevHeatingStartTime; // in ms
+unsigned int heatingInterval;
 unsigned int heaterState;
 float minHeatingTemperature, maxHeatingTemperature;
+
+unsigned int controlState;
+const unsigned int relayPulseDelay = 300; // in ms
+const unsigned int relayBetweenPulseDelay = 3000; // in ms
+const unsigned int forcedHeatDetectionDelay = 30000; // in ms
+unsigned long prevControlStateTime; // in ms
 
 /*
  LCD 1602 settings
@@ -233,9 +239,10 @@ void setup(void) {
 	heatingStartTime = 0;
 	prevHeatingStartTime = 0;
 	heatingInterval = 0;
-  lastHeatingDelay = 0;
-  lastForcedHeatingDelay = 0;
   heaterState = 0;
+
+  controlState = 0;
+  prevControlStateTime = 0;
 
 	minHeatingTemperature = NAN;
 	maxHeatingTemperature = NAN;
@@ -333,8 +340,6 @@ void loop(void) {
 		// ############ do some math and evaluate heater state
 
     // decisions based on previous state
-    lastForcedHeatingDelay += sensorPollingInterval/1000;
-    lastHeatingDelay += sensorPollingInterval/1000;
 
     // new state evaluation
 		if (outputTemperatureSpeed <= outputSpeedCoolingThreshold ) {
@@ -352,7 +357,6 @@ void loop(void) {
 		if (inputTemperatureSpeed >= inputSpeedHeatingThreshold ) {
 			if ( heaterState == 2 ) {
 				heaterState = 3;	// heat room
-        lastHeatingDelay = 0;
 
 				// calculate heatingInterval;
 				if (heatingInterval == 0) {	// first or second cicle
@@ -382,9 +386,11 @@ void loop(void) {
 				minHeatingTemperature = (minHeatingTemperature + outputTemperature)/2;
 			}
 
-      if( heatingInterval > 0 && currentTime > prevHeatingStartTime + heatingInterval * forceHeatingIntervalFraction ){
-        commonDebug("Start forced room heating!");
-        lastForcedHeatingDelay = 0;
+      if( heatingInterval > 0 && currentTime > (prevHeatingStartTime + (double)(heatingInterval) * 1000 * forceHeatingIntervalFraction) ){
+        if( controlState == 0 ) {
+          controlState = 1; // need to heat
+          commonDebug("Need to force room heating.");
+        }
       }
 		}
 
@@ -397,6 +403,38 @@ void loop(void) {
 		}
 
   } else {
+
+    // ###########  control heater block
+    switch (controlState) {
+      case 0: // idle
+        break;
+      case 1: // need to heat
+        // imitate 1st pulse
+        delay(relayPulseDelay);
+
+        controlState++;
+        prevControlStateTime = currentTime;
+        break;
+      case 2: // was 1st relay pulse, need to pulse 2nd time
+        if( currentTime > (prevControlStateTime + relayBetweenPulseDelay) ) {
+          // imitate 2nd pulse
+          delay(relayPulseDelay);
+
+          controlState++;
+          prevControlStateTime = currentTime;
+        }
+        break;
+      case 3: // heat was forced by both relay pulsing
+        if (heaterState == 3) { // apparently room is heating
+              controlState = 0;
+        } else if (currentTime > (prevControlStateTime + forcedHeatDetectionDelay)) {
+          commonDebug("ERROR: there was previous attempt to force room heating.");
+          controlState++;
+        }
+        break;
+      case 4: // error
+        break;
+    }
 
     ArduinoOTA.handle();
 
@@ -472,12 +510,9 @@ void loop(void) {
                 if( isnan(maxHeatingTemperature)==false ) {
                   client.println(maxHeatingTemperature);
                 }
-              } else if (header.indexOf("GET /lastHeatingDelay") >= 0) {
-                webServerDebug("Last heating delay requested");
-                client.println(lastHeatingDelay);
-              } else if (header.indexOf("GET /lastForcedHeatingDelay") >= 0) {
-                webServerDebug("Last forced heating delay requested");
-                client.println(lastForcedHeatingDelay);
+              } else if (header.indexOf("GET /controlState") >= 0) {
+                webServerDebug("Control state requested");
+                client.println(controlState);
               } else if (header.indexOf("GET /revision") >= 0) {
                 webServerDebug("Firmware revision requested");
                 client.println(firmwareRevision );
