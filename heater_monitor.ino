@@ -32,7 +32,7 @@ char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
 #endif
 #endif
 
-const unsigned firmwareRevision = 22;
+const unsigned firmwareRevision = 23;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -348,7 +348,7 @@ void loop(void) {
 		if (waterTemperatureSpeed >= waterSpeedHeatingThreshold ) {
 			heaterState = 4;	// heat water, most precedence over other heating modes
 		}
-		if (outputTemperatureSpeed >= outputSpeedHeatingThreshold ) {
+		if (outputTemperatureSpeed >= outputSpeedHeatingThreshold && outputTemperature > inputTemperature ) {
 			if ( heaterState == 1 ) {
 				heaterState = 2;	// some heating mode: either room or water
 				heatingStartTime = currentTime;
