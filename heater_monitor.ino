@@ -32,7 +32,7 @@ char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
 #endif
 #endif
 
-const unsigned firmwareRevision = 20;
+const unsigned firmwareRevision = 21;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -373,6 +373,13 @@ void loop(void) {
 				prevHeatingStartTime = heatingStartTime;
 			}
 		}
+
+    if ( heaterState == 2 ) {
+      if (heatingInterval > 0 && currentTime > heatingStartTime + heatingInterval) { // seems we have pump in off state
+        heaterState = 1;
+        commonDebug("Forced set heater state to cooling.");
+      }
+    }
 
     commonDebug((String)("Heater state (num): ") + heaterState);
     commonDebug((String)("Heater state: ") + getHeaterStateString());
