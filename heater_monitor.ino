@@ -32,7 +32,7 @@ char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
 #endif
 #endif
 
-const unsigned firmwareRevision = 17;
+const unsigned firmwareRevision = 18;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -245,10 +245,9 @@ void loop(void) {
   unsigned int tmpHeatingInterval;
   unsigned long currentTime = millis();
 
-  commonDebug("loop() start.");
-
   if (currentTime < previousSensorPollingTime) {
     previousSensorPollingTime = currentTime;
+    commonDebug("millis() counter overflow detected.");
     return; // protect from counter overflow
   }
 
@@ -260,6 +259,8 @@ void loop(void) {
     lcd.print(" | ");
     lcd.setCursor(7, 1);
     lcd.print(" | ");
+
+    commonDebug("Sensor polling start.");
 
 		switch( currentSensor ) {
 			case 1:
@@ -326,6 +327,8 @@ void loop(void) {
 		currentSensor++;
 		if (currentSensor > maxSensors)
 			currentSensor = 1;
+
+    commonDebug("Sensor polling finish.");
 
 		// ############ do some math and evaluate heater state
 
