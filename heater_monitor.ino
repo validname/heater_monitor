@@ -32,7 +32,7 @@ char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
 #endif
 #endif
 
-const unsigned firmwareRevision = 21;
+const unsigned firmwareRevision = 22;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -396,7 +396,7 @@ void loop(void) {
       if( heatingInterval > 0 && currentTime > (prevHeatingStartTime + (double)(heatingInterval) * 1000 * forceHeatingIntervalFraction) ){
         if( controlState == 0 ) {
           controlState = 1; // need to heat
-          commonDebug("Need to force room heating.");
+          commonDebug("[CONTROL] Need to force room heating.");
         }
       }
 		}
@@ -416,6 +416,7 @@ void loop(void) {
       case 0: // idle
         break;
       case 1: // need to heat
+        commonDebug("[CONTROL] 1st pulsing relay");
         // imitate 1st pulse
         delay(relayPulseDelay);
 
@@ -424,6 +425,7 @@ void loop(void) {
         break;
       case 2: // was 1st relay pulse, need to pulse 2nd time
         if( currentTime > (prevControlStateTime + relayBetweenPulseDelay) ) {
+          commonDebug("[CONTROL] 2nd pulsing relay");
           // imitate 2nd pulse
           delay(relayPulseDelay);
 
@@ -433,9 +435,10 @@ void loop(void) {
         break;
       case 3: // heat was forced by both relay pulsing
         if (heaterState == 3) { // apparently room is heating
+              commonDebug("[CONTROL] Heating is started");
               controlState = 0;
         } else if (currentTime > (prevControlStateTime + forcedHeatDetectionDelay)) {
-          commonDebug("ERROR: there was previous attempt to force room heating.");
+          commonDebug("[CONTROL] ERROR: failed attempt to force room heating, time is out");
           controlState++;
         }
         break;
