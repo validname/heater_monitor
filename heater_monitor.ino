@@ -32,7 +32,7 @@ char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
 #endif
 #endif
 
-const unsigned firmwareRevision = 23;
+const unsigned firmwareRevision = 24;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -375,7 +375,7 @@ void loop(void) {
 		}
 
     if ( heaterState == 2 ) {
-      if (heatingInterval > 0 && currentTime > heatingStartTime + heatingInterval) { // seems we have pump in off state
+      if (heatingInterval > 0 && currentTime > heatingStartTime + heatingInterval*1000) { // seems we have pump in off state
         heaterState = 1;
         commonDebug("Forced set heater state to cooling.");
       }
@@ -442,7 +442,11 @@ void loop(void) {
           controlState++;
         }
         break;
-      case 4: // error
+      case 4: // was error
+        if (heaterState == 3) { // but now room is heating
+              commonDebug("[CONTROL] Heating was started by heater itself");
+              controlState = 0;
+        }
         break;
     }
 
