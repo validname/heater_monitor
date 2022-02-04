@@ -32,7 +32,7 @@ char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
 #endif
 #endif
 
-const unsigned firmwareRevision = 24;
+const unsigned firmwareRevision = 26;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -60,15 +60,16 @@ const float inputSpeedHeatingThreshold = 0.02;
 const float waterSpeedHeatingThreshold = 0.02;
 const float heatingCicleTimeCorrectionFraction = 0.1;	// from 0 to 1
 const float forceHeatingIntervalFraction = 2; // from 1 to beyond
+const float temperatureMaxChangeFactor = 2;  // how much temperature can changes, maximally
 
 double inputTemperature, previuosInputTemperature, inputTemperatureSpeed;
 double outputTemperature, previuosOutputTemperature, outputTemperatureSpeed;
 double waterTemperature, previuosWaterTemperature, waterTemperatureSpeed;
+double tmpTemperature;
 
-unsigned long heatingStartTime, prevHeatingStartTime; // in ms
-unsigned int heatingInterval;
+unsigned long heatingStartTime, lastHeatingStartTime, heatingInterval; // in ms
 unsigned int heaterState;
-float minHeatingTemperature, maxHeatingTemperature;
+double minHeatingTemperature, maxHeatingTemperature;
 
 unsigned int controlState;
 const unsigned int relayPulseDelay = 300; // in ms
@@ -237,7 +238,7 @@ void setup(void) {
 	oneSensorInterval = sensorPollingInterval * maxSensors;
 
 	heatingStartTime = 0;
-	prevHeatingStartTime = 0;
+	lastHeatingStartTime = 0;
 	heatingInterval = 0;
   heaterState = 0;
 
@@ -249,7 +250,7 @@ void setup(void) {
 }
 
 void loop(void) {
-  unsigned int tmpHeatingInterval;
+  unsigned long tmpHeatingInterval;
   unsigned long currentTime = millis();
 
   if (currentTime < previousSensorPollingTime) {
@@ -273,39 +274,60 @@ void loop(void) {
 			case 1:
 				if (DS18B20Sensors.requestTemperaturesByAddress(DS18B20SensorAddressInput)) {
 
-					previuosInputTemperature = inputTemperature;
-					inputTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressInput);
-					inputTemperatureSpeed = (inputTemperature - previuosInputTemperature) * 1000 / (double)oneSensorInterval;
+					tmpTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressInput);
+          if ( tmpTemperature > 0 ) {
+            if ( (!isnan(previuosInputTemperature) && tmpTemperature/previuosInputTemperature < temperatureMaxChangeFactor) || isnan(previuosInputTemperature) ) {
+              previuosInputTemperature = inputTemperature;
+              inputTemperature = tmpTemperature;
+              inputTemperatureSpeed = (inputTemperature - previuosInputTemperature) * 1000 / (double)oneSensorInterval;
 
-					printTemperatureAtLCD(inputTemperature, "i", 0, 0);
-					commonDebug((String)("Temperature of heater input: ") + inputTemperature);
-					commonDebug((String)("Temperature speed of heater input: ") + inputTemperatureSpeed);
+              printTemperatureAtLCD(inputTemperature, "i", 0, 0);
+              commonDebug((String)("Temperature of heater input: ") + inputTemperature);
+              commonDebug((String)("Temperature speed of heater input: ") + inputTemperatureSpeed);
+            }
+          } else {
+            commonDebug((String)("ERROR: Got incorrect temperature of heater input: ") + tmpTemperature);
+          }
 				}
 				break;
 
 			case 2:
 				if (DS18B20Sensors.requestTemperaturesByAddress(DS18B20SensorAddressOutput)) {
 
-					previuosOutputTemperature = outputTemperature;
-					outputTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressOutput);
-					outputTemperatureSpeed = (outputTemperature - previuosOutputTemperature) * 1000 / (double)oneSensorInterval;
+          tmpTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressOutput);
+          if ( tmpTemperature > 0 ) {
+            if ( (!isnan(previuosOutputTemperature) && tmpTemperature/previuosOutputTemperature < temperatureMaxChangeFactor) || isnan(previuosOutputTemperature) ) {
+              previuosOutputTemperature = outputTemperature;
+              outputTemperature = tmpTemperature;
+              outputTemperatureSpeed = (outputTemperature - previuosOutputTemperature) * 1000 / (double)oneSensorInterval;
 
-					printTemperatureAtLCD(outputTemperature, "o", 0, 1);
-					commonDebug((String)("Temperature of heater output: ") + outputTemperature);
-					commonDebug((String)("Temperature speed of heater output: ") + outputTemperatureSpeed);
+              printTemperatureAtLCD(outputTemperature, "o", 0, 1);
+              commonDebug((String)("Temperature of heater output: ") + outputTemperature);
+              commonDebug((String)("Temperature speed of heater output: ") + outputTemperatureSpeed);
+            }
+				  } else {
+            commonDebug((String)("ERROR: Got incorrect temperature of heater output: ") + tmpTemperature);
+          }
 				}
 				break;
 
 			case 3:
 				if (DS18B20Sensors.requestTemperaturesByAddress(DS18B20SensorAddressWater)) {
 
-					previuosWaterTemperature = waterTemperature;
-					waterTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressWater);
-					waterTemperatureSpeed = (waterTemperature - previuosWaterTemperature) * 1000 / (double)oneSensorInterval;
+          tmpTemperature = DS18B20Sensors.getTempC(DS18B20SensorAddressWater);
+          if ( tmpTemperature > 0 ) {
+            if ( (!isnan(previuosWaterTemperature) && tmpTemperature/previuosWaterTemperature < temperatureMaxChangeFactor) || isnan(previuosWaterTemperature) ) {
+              previuosWaterTemperature = waterTemperature;
+              waterTemperature = tmpTemperature;
+              waterTemperatureSpeed = (waterTemperature - previuosWaterTemperature) * 1000 / (double)oneSensorInterval;
 
-					printTemperatureAtLCD(waterTemperature, "w", 10, 0);
-					commonDebug((String)("Temperature of hot water: ") + waterTemperature);
-					commonDebug((String)("Temperature speed of heater water: ") + waterTemperatureSpeed);
+              printTemperatureAtLCD(waterTemperature, "w", 10, 0);
+              commonDebug((String)("Temperature of hot water: ") + waterTemperature);
+              commonDebug((String)("Temperature speed of hot water: ") + waterTemperatureSpeed);
+            }
+          } else {
+            commonDebug((String)("ERROR: Got incorrect temperature of hot water: ") + tmpTemperature);
+          }
 				}
 				break;
 
@@ -360,22 +382,22 @@ void loop(void) {
 
 				// calculate heatingInterval;
 				if (heatingInterval == 0) {	// first or second cicle
-					if ( prevHeatingStartTime > 0 ) { // certainly second cicle
-						heatingInterval = (heatingStartTime -  prevHeatingStartTime) / 1000;
+					if ( lastHeatingStartTime > 0 ) { // certainly second cicle
+						heatingInterval = heatingStartTime -  lastHeatingStartTime;
 					}
 				} else {
-          if (heatingStartTime >  prevHeatingStartTime) { // protect from counter overflow
-					  tmpHeatingInterval = (heatingStartTime -  prevHeatingStartTime) / 1000;
+          if (heatingStartTime >  lastHeatingStartTime) { // protect from counter overflow
+					  tmpHeatingInterval = heatingStartTime -  lastHeatingStartTime;
 					  heatingInterval = (1 - heatingCicleTimeCorrectionFraction/2)* heatingInterval + heatingCicleTimeCorrectionFraction/2 * tmpHeatingInterval;
           }
 				}
 
-				prevHeatingStartTime = heatingStartTime;
+				lastHeatingStartTime = heatingStartTime;
 			}
 		}
 
     if ( heaterState == 2 ) {
-      if (heatingInterval > 0 && currentTime > heatingStartTime + heatingInterval*1000) { // seems we have pump in off state
+      if (heatingInterval > 0 && currentTime > heatingStartTime + heatingInterval) { // seems we have pump in off state
         heaterState = 1;
         commonDebug("Forced set heater state to cooling.");
       }
@@ -386,14 +408,13 @@ void loop(void) {
 
     // decisions based on new state
 		if (heaterState == 1) { // cooling
-      if (isnan(minHeatingTemperature)) {
+      if (isnan(minHeatingTemperature) && isnan(outputTemperature) == false) {
         minHeatingTemperature = outputTemperature;
-      }
-			else if (outputTemperature <= minHeatingTemperature) {
+      } else if (outputTemperature <= minHeatingTemperature) {
 				minHeatingTemperature = (minHeatingTemperature + outputTemperature)/2;
 			}
 
-      if( heatingInterval > 0 && currentTime > (prevHeatingStartTime + (double)(heatingInterval) * 1000 * forceHeatingIntervalFraction) ){
+      if( heatingInterval > 0 && currentTime > (lastHeatingStartTime + (double)(heatingInterval) * forceHeatingIntervalFraction) ){
         if( controlState == 0 ) {
           controlState = 1; // need to heat
           commonDebug("[CONTROL] Need to force room heating.");
@@ -512,7 +533,7 @@ void loop(void) {
               } else if (header.indexOf("GET /heatingInterval") >= 0) {
                 webServerDebug("Heating interval requested");
                 if( heatingInterval > 0 ) {
-                  client.println(heatingInterval);
+                  client.println(heatingInterval/1000);
                 }
               } else if (header.indexOf("GET /minHeatingTemperature") >= 0) {
                 webServerDebug("Minimal heating temperature requested");
