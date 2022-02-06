@@ -32,7 +32,7 @@ char DebugUDPBuffer[DEBUG_COMMON_UDP_BUFFER_LENGTH];
 #endif
 #endif
 
-const unsigned firmwareRevision = 26;
+const unsigned firmwareRevision = 27;
 
 // updates some sensor every N milliseconds
 const unsigned int sensorPollingInterval = 1000;
@@ -40,6 +40,8 @@ const unsigned int maxSensors = 5;
 unsigned long previousSensorPollingTime = 0;
 unsigned int currentSensor;
 unsigned int oneSensorInterval;
+
+#define RELAY 14
 
 /*
   DS18B20 settings
@@ -217,6 +219,10 @@ void setup(void) {
   DS18B20Sensors.begin();
 
   dht22.begin();
+
+  digitalWrite(RELAY, LOW);
+  pinMode(RELAY, OUTPUT);
+  digitalWrite(RELAY, LOW);
 
   currentSensor = 1;
 
@@ -438,8 +444,10 @@ void loop(void) {
         break;
       case 1: // need to heat
         commonDebug("[CONTROL] 1st pulsing relay");
-        // imitate 1st pulse
+        // 1st pulse
+        digitalWrite(RELAY, HIGH);
         delay(relayPulseDelay);
+        digitalWrite(RELAY, LOW);
 
         controlState++;
         prevControlStateTime = currentTime;
@@ -447,8 +455,10 @@ void loop(void) {
       case 2: // was 1st relay pulse, need to pulse 2nd time
         if( currentTime > (prevControlStateTime + relayBetweenPulseDelay) ) {
           commonDebug("[CONTROL] 2nd pulsing relay");
-          // imitate 2nd pulse
+          // 2nd pulse
+          digitalWrite(RELAY, HIGH);
           delay(relayPulseDelay);
+          digitalWrite(RELAY, LOW);
 
           controlState++;
           prevControlStateTime = currentTime;
@@ -550,7 +560,12 @@ void loop(void) {
                 client.println(controlState);
               } else if (header.indexOf("GET /revision") >= 0) {
                 webServerDebug("Firmware revision requested");
-                client.println(firmwareRevision );
+                client.println(firmwareRevision);
+              } else if (header.indexOf("PUT /forceHeat") >= 0) {
+                webServerDebug("PUT: force heat requested");
+                if (controlState==0 || controlState==4) {
+                  controlState=1;
+                }
               }
 
               client.println();
